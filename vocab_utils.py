@@ -79,5 +79,5 @@ class Statistics(namedtuple("_", ["words", "postags", "labels", "characters", "s
     def __str__(self):
         return "{} words, {} postags, {} labels, {} characters, {} supertags.".format(
             len(self.words), len(self.postags), len(self.labels), len(self.characters),
-            len(self.labels), len(self.characters), len(self.supe)
+            len(self.labels), len(self.characters), len(self.supertags)
         )
