@@ -40,13 +40,12 @@ class Dictionary(Counter):
 
     def use_top_k(self, k, ensure=()):
         ret = Dictionary(initial=())
+        for ensure_item in ensure:
+                ret[ensure_item] = 0
         for word, count in self.most_common(k):
             ret[word] = count
         ret.int_to_word = list(ret.keys())
         ret.word_to_int = {word: idx for idx, word in enumerate(ret.int_to_word)}
-        for ensure_item in ensure:
-            if ensure_item not in ret.keys():
-                ret.update([ensure_item])
         return ret
 
     def __getstate__(self):
