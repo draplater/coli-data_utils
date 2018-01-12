@@ -59,18 +59,25 @@ class Dictionary(Counter):
         return Dictionary, ((),), self.__getstate__()
 
 
-class Statistics(namedtuple("_", ["words", "postags", "labels", "characters"])):
+class Statistics(namedtuple("_", ["words", "postags", "labels", "characters", "supertags"])):
     @classmethod
     def from_sentences(cls, sentences):
         """:type sentences: list[Graph | Sentence]"""
-        ret = cls(Dictionary(), Dictionary(), Dictionary(), Dictionary())
+        ret = cls(Dictionary(), Dictionary(), Dictionary(), Dictionary(), Dictionary())
         for sentence in sentences:
             ret.words.update(i.norm for i in sentence)
             ret.characters.update(j for i in sentence for j in i.norm)
             ret.postags.update(i.postag for i in sentence)
+            ret.supertags.update(getattr(i, "supertag", None) for i in sentence)
             if isinstance(sentence, Graph):
                 ret.labels.update(edge.label for node in sentence for edge in node.edges)
             else:
                 assert isinstance(sentence, Sentence)
                 ret.labels.update(i.relation for i in sentence)
         return ret
+
+    def __str__(self):
+        return "{} words, {} postags, {} labels, {} characters, {} supertags.".format(
+            len(self.words), len(self.postags), len(self.labels), len(self.characters),
+            len(self.labels), len(self.characters), len(self.supe)
+        )
