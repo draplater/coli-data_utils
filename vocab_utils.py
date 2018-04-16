@@ -1,6 +1,7 @@
 from collections import Counter, namedtuple
 
 import numpy as np
+from namedlist import namedlist
 
 from graph_utils import Graph
 from tree_utils import Sentence
@@ -41,9 +42,20 @@ class Dictionary(Counter):
     def use_top_k(self, k, ensure=()):
         ret = Dictionary(initial=())
         for ensure_item in ensure:
-                ret[ensure_item] = 0
+            ret[ensure_item] = 0
         for word, count in self.most_common(k):
             ret[word] = count
+        ret.int_to_word = list(ret.keys())
+        ret.word_to_int = {word: idx for idx, word in enumerate(ret.int_to_word)}
+        return ret
+
+    def strip_low_freq(self, min_count=1, ensure=()):
+        ret = Dictionary(initial=())
+        for ensure_item in ensure:
+            ret[ensure_item] = 1
+        for word, count in self.items():
+            if count >= min_count:
+                ret[word] = count
         ret.int_to_word = list(ret.keys())
         ret.word_to_int = {word: idx for idx, word in enumerate(ret.int_to_word)}
         return ret
@@ -59,14 +71,14 @@ class Dictionary(Counter):
         return Dictionary, ((),), self.__getstate__()
 
 
-class Statistics(namedtuple("_", ["words", "postags", "labels", "characters", "supertags"])):
+class Statistics(namedlist("_", ["words", "postags", "labels", "characters", "supertags"])):
     @classmethod
-    def from_sentences(cls, sentences):
+    def from_sentences(cls, sentences, word_limit=1):
         """:type sentences: list[Graph | Sentence]"""
         ret = cls(Dictionary(), Dictionary(), Dictionary(), Dictionary(), Dictionary())
         for sentence in sentences:
             ret.words.update(i.norm for i in sentence)
-            ret.characters.update(j for i in sentence for j in i.norm)
+            ret.characters.update(j for i in sentence for j in i.form)
             ret.postags.update(i.postag for i in sentence)
             ret.supertags.update(getattr(i, "supertag", None) for i in sentence)
             if isinstance(sentence, Graph):
@@ -74,6 +86,9 @@ class Statistics(namedtuple("_", ["words", "postags", "labels", "characters", "s
             else:
                 assert isinstance(sentence, Sentence)
                 ret.labels.update(i.relation for i in sentence)
+        if word_limit > 1:
+            ret.words = ret.words.strip_low_freq(min_count=word_limit,
+                                                 ensure=("___PAD___", "___UNKNOWN___"))
         return ret
 
     def __str__(self):
