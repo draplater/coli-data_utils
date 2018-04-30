@@ -5,7 +5,6 @@ import numpy as np
 
 def group_sentences(length_counter, n_buckets):
     if len(length_counter) < n_buckets:
-        print("Too many buckets! ({} > {})".format(n_buckets, len(length_counter)))
         n_buckets = len(length_counter)
     lengths = [0] + sorted(length_counter)
     dp = np.zeros((len(lengths), n_buckets + 1), dtype=np.int64)
