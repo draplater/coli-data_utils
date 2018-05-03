@@ -73,9 +73,11 @@ class Dictionary(Counter):
 
 class Statistics(namedlist("_", ["words", "postags", "labels", "characters", "supertags"])):
     @classmethod
-    def from_sentences(cls, sentences, word_limit=1):
+    def from_sentences(cls, sentences, word_limit=1, initial=("___PAD___", "___UNKNOWN___")):
         """:type sentences: list[Graph | Sentence]"""
-        ret = cls(Dictionary(), Dictionary(), Dictionary(), Dictionary(), Dictionary())
+        ret = cls(Dictionary(initial=initial), Dictionary(initial=initial),
+                  Dictionary(initial=initial), Dictionary(initial=initial),
+                  Dictionary(initial=initial))
         for sentence in sentences:
             ret.words.update(i.norm for i in sentence)
             ret.characters.update(j for i in sentence for j in i.form)
