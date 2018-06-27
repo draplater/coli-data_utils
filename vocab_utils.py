@@ -86,7 +86,7 @@ class Statistics(namedlist("_", ["words", "postags", "labels", "characters", "su
             if isinstance(sentence, Graph):
                 ret.labels.update(edge.label for node in sentence for edge in node.edges)
             else:
-                assert isinstance(sentence, Sentence)
+                # assert isinstance(sentence, Sentence)
                 ret.labels.update(i.relation for i in sentence)
         if word_limit > 1:
             ret.words = ret.words.strip_low_freq(min_count=word_limit,
