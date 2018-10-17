@@ -3,12 +3,13 @@ from collections import Counter, namedtuple
 import numpy as np
 from namedlist import namedlist
 
+from data_utils.dataset import PAD, UNKNOWN
 from graph_utils import Graph
 from tree_utils import Sentence
 
 
 class Dictionary(Counter):
-    def __init__(self, initial=("___PAD___", "___UNKNOWN___")):
+    def __init__(self, initial=(PAD, UNKNOWN)):
         super(Dictionary, self).__init__()
         self.int_to_word = []
         self.word_to_int = {}
