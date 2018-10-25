@@ -21,6 +21,19 @@ class Dictionary(Counter):
             self.int_to_word.append(key)
         super(Dictionary, self).__setitem__(key, value)
 
+    def update_and_get_id(self, key, allow_new=True, unk_id=2):
+        if not key in self:
+            self.word_to_int[key] = this_id = len(self.int_to_word)
+            self.int_to_word.append(key)
+            super(Dictionary, self).__setitem__(key, 1)
+            return this_id
+        else:
+            if allow_new:
+                self[key] += 1
+                return self.word_to_int[key]
+            else:
+                return unk_id
+
     def lookup(self, sentences, bucket, keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
