@@ -1,14 +1,14 @@
-from collections import Counter, namedtuple
-
 import numpy as np
 from namedlist import namedlist
 
+from common_utils import UserCounter
 from data_utils.dataset import PAD, UNKNOWN
 from graph_utils import Graph
+from logger import default_logger
 from tree_utils import Sentence
 
 
-class Dictionary(Counter):
+class Dictionary(UserCounter):
     def __init__(self, initial=(PAD, UNKNOWN)):
         super(Dictionary, self).__init__()
         self.int_to_word = []
@@ -74,15 +74,18 @@ class Dictionary(Counter):
         ret.word_to_int = {word: idx for idx, word in enumerate(ret.int_to_word)}
         return ret
 
-    def __getstate__(self):
-        return dict(self), self.int_to_word, self.word_to_int
-
     def __setstate__(self, state):
-        data, self.int_to_word, self.word_to_int = state
-        self.update(data)
+        if isinstance(state, tuple):
+            # TODO: remove backward compatibility
+            default_logger.warning("old style Dictionary in saved file.")
+            data, self.int_to_word, self.word_to_int = state
+            self.update(data)
+        else:
+            assert isinstance(state, dict)
+            self.__dict__.update(state)
 
     def __reduce__(self):
-        return Dictionary, ((),), self.__getstate__()
+        return Dictionary, ((),), self.__dict__
 
 
 class Statistics(namedlist("_", ["words", "postags", "labels", "characters", "supertags"])):
