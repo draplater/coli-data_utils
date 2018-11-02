@@ -2,8 +2,6 @@ import pickle
 
 import numpy as np
 
-from logger import logger
-
 
 def group_sentences(length_counter, n_buckets, batch_size):
     if len(length_counter) < n_buckets:

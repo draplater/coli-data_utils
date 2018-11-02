@@ -1,10 +1,10 @@
 import numpy as np
 from namedlist import namedlist
 
-from common_utils import UserCounter
+from coli.basic_tools.common_utils import UserCounter
 from data_utils.dataset import PAD, UNKNOWN
 from graph_utils import Graph
-from logger import default_logger
+from coli.basic_tools.logger import default_logger
 from tree_utils import Sentence
 
 
