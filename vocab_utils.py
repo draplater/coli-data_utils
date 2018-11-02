@@ -3,9 +3,9 @@ from namedlist import namedlist
 
 from coli.basic_tools.common_utils import UserCounter
 from data_utils.dataset import PAD, UNKNOWN
-from graph_utils import Graph
+from coli.bilexical_base.graph_utils import Graph
 from coli.basic_tools.logger import default_logger
-from tree_utils import Sentence
+from coli.bilexical_base.tree_utils import Sentence
 
 
 class Dictionary(UserCounter):
