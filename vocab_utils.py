@@ -78,8 +78,10 @@ class Dictionary(UserCounter):
         if isinstance(state, tuple):
             # TODO: remove backward compatibility
             default_logger.warning("old style Dictionary in saved file.")
-            data, self.int_to_word, self.word_to_int = state
+            data, int_to_word, word_to_int = state
             self.update(data)
+            self.int_to_word = int_to_word
+            self.word_to_int = word_to_int
         else:
             assert isinstance(state, dict)
             self.__dict__.update(state)
