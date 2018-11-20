@@ -26,9 +26,10 @@ END_OF_WORD = "\05"
 
 def lookup_list(tokens_itr, token_dict, padded_length,
                 default, dtype=np.int32,
-                start_and_stop=False):
-    ret = np.zeros((padded_length + (2 if start_and_stop else 0),),
-                   dtype=dtype)
+                start_and_stop=False,
+                tensor_factory=np.zeros):
+    ret = tensor_factory((padded_length + (2 if start_and_stop else 0),),
+                         dtype=dtype)
     if start_and_stop:
         ret[0] = token_dict.get(START_OF_SENTENCE)
     idx = 1 if start_and_stop else 0
@@ -44,12 +45,14 @@ def lookup_characters(words_itr, char_dict, padded_length,
                       default, max_word_length=20, dtype=np.int32,
                       start_and_stop=True,
                       sentence_start_and_stop=False,
-                      return_lengths=False):
+                      return_lengths=False,
+                      tensor_factory=np.zeros
+                      ):
     if sentence_start_and_stop:
         words_itr = itertools.chain([CHAR_START_OF_SENTENCE_3], words_itr, [CHAR_END_OF_SENTENCE_3])
 
-    chars_int = np.zeros((padded_length, max_word_length), dtype=dtype)
-    char_lengths = np.zeros((padded_length,), dtype=dtype)
+    chars_int = tensor_factory((padded_length, max_word_length), dtype=dtype)
+    char_lengths = tensor_factory((padded_length,), dtype=dtype)
 
     start_and_stop_length = 2 if start_and_stop else 0
     l_ = (max_word_length - 2 - start_and_stop_length) // 2
