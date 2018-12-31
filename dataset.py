@@ -267,7 +267,7 @@ bucket_types = {"simple": SimpleSentenceBuckets, "length_group": SentenceBuckets
 
 
 @dataclass
-class TensorflowHParamsBase(object):
+class HParamsBase(object):
     train_iters: "Count of training step" = 50000
     train_batch_size: "Batch size when training (words)" = 5000
     test_batch_size: "Batch size when inference (words)" = 5000
@@ -282,3 +282,6 @@ class TensorflowHParamsBase(object):
     seed: "random seed" = 42
     bucket_type: "bucket_type" = field(default="length_group",
                                        metadata={"choices": bucket_types})
+
+
+TensorflowHParamsBase = HParamsBase
