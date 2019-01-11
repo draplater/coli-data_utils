@@ -124,10 +124,10 @@ U = TypeVar("U", bound=SentenceFeaturesBase)
 
 
 def sentences_to_batches(batch_sentences, pls,
-                         sort_key_func, original):
+                         sort_key_func, original, **kwargs):
     if sort_key_func is not None:
         batch_sentences.sort(key=sort_key_func, reverse=True)
-    ret = batch_sentences[0].get_feed_dict(pls, batch_sentences)
+    ret = batch_sentences[0].get_feed_dict(pls, batch_sentences, **kwargs)
     if original:
         ret = (batch_sentences, ret)
     return ret
@@ -137,13 +137,13 @@ class SentenceBucketsBase(metaclass=ABCMeta):
     max_sentence_batch_size: int
 
     def return_batches(self, batch_sentences, pls, batch_size,
-                       sort_key_func, original, use_sub_batch):
+                       sort_key_func, original, use_sub_batch, **kwargs):
         if not use_sub_batch:
             return sentences_to_batches(
-                batch_sentences, pls, sort_key_func, original)
+                batch_sentences, pls, sort_key_func, original, **kwargs)
         else:
             sub_batches = [sentences_to_batches(
-                sub_batch_sents, pls, sort_key_func, original)
+                sub_batch_sents, pls, sort_key_func, original, **kwargs)
                 for sub_batch_sents in split_to_sub_batches(
                     batch_sentences, self.max_sentence_batch_size, batch_size)
             ]
@@ -172,7 +172,8 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                          pls=IdentityGetAttr(),
                          shuffle=False, original=False,
                          sort_key_func=None,
-                         use_sub_batch=False
+                         use_sub_batch=False,
+                         **kwargs
                          ):
         sentences = list(self.sentences_features)
         if shuffle:
@@ -181,7 +182,7 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                 sentences,
                 self.max_sentence_batch_size):
             yield self.return_batches(batch_sentences, pls, batch_size,
-                                      sort_key_func, original, use_sub_batch)
+                                      sort_key_func, original, use_sub_batch, **kwargs)
 
 
 class SentenceBuckets(SentenceBucketsBase, Generic[U]):
@@ -226,7 +227,8 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
                          pls=IdentityGetAttr(),
                          shuffle=False, original=False,
                          sort_key_func=None,
-                         use_sub_batch=False
+                         use_sub_batch=False,
+                         **kwargs
                          ):
         """
         :param pls: placeholders. Use string as placeholder by default
@@ -252,7 +254,7 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
         for length, sent_ids in length_and_sent_ids:
             batch_sentences = [self.buckets[length][i] for i in sent_ids]
             yield self.return_batches(batch_sentences, pls, batch_size,
-                                      sort_key_func, original, use_sub_batch)
+                                      sort_key_func, original, use_sub_batch, **kwargs)
 
 
 def make_sentence_bucket_class(
