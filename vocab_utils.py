@@ -1,3 +1,5 @@
+from typing import List, Dict
+
 import numpy as np
 from namedlist import namedlist
 
@@ -11,8 +13,8 @@ from coli.bilexical_base.tree_utils import Sentence
 class Dictionary(UserCounter):
     def __init__(self, initial=(PAD, UNKNOWN)):
         super(Dictionary, self).__init__()
-        self.int_to_word = []
-        self.word_to_int = {}
+        self.int_to_word: List[str] = []
+        self.word_to_int: Dict[str, int] = {}
         self.update(initial)
 
     def __setitem__(self, key, value):
