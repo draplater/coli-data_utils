@@ -2,12 +2,11 @@ import itertools
 from abc import ABCMeta, abstractmethod
 from collections import Counter, OrderedDict
 from random import Random
-from typing import Optional, Mapping, List, Type, Generic, TypeVar, Callable
+from typing import Optional, Mapping, List, Type, Generic, TypeVar, Callable, Any, Dict
 
 import numpy as np
 from dataclasses import dataclass, field
 
-from bilm.load_vocab import BiLMVocabLoader
 from coli.basic_tools.common_utils import split_to_batches, IdentityGetAttr, T
 from coli.basic_tools.logger import default_logger
 from coli.data_utils.group_sentences import group_sentences
@@ -98,8 +97,19 @@ def split_to_sub_batches(iterable, sentence_count, word_count):
 
 @dataclass
 class SentenceFeaturesBase(Generic[T], metaclass=ABCMeta):
-    original_idx: int
-    original_obj: T
+    original_idx: int = -1
+    original_obj: T = None
+    words: Any = None
+    extra: Dict[str, Any] = field(default_factory=dict)
+    has_filled: bool = True
+
+    @classmethod
+    def create_empty_item(cls,
+                          original_idx: int,
+                          sentence: T
+                          ):
+        return cls(original_idx=original_idx,
+                   original_obj=sentence, has_filled=False)
 
     @classmethod
     @abstractmethod
@@ -107,16 +117,15 @@ class SentenceFeaturesBase(Generic[T], metaclass=ABCMeta):
                           original_idx: int,
                           sentence: T,
                           statistics,
-                          external_lookup: Mapping[str, int],
                           padded_length: int,
                           lower: bool = True,
-                          bilm_loader: Optional[BiLMVocabLoader] = None
+                          plugins: Any = None
                           ):
         pass
 
     @classmethod
     @abstractmethod
-    def get_feed_dict(cls, pls, batch_sentences):
+    def get_feed_dict(cls, pls, batch_sentences, plugins=None):
         pass
 
 
@@ -194,12 +203,15 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
                  convert_func: Callable[[int, T, int], U],
                  batch_size: int,
                  n_buckets: int,
+                 sentence_feature_class: Type[SentenceFeaturesBase],
                  seed: Optional[int] = None,
                  log_func=default_logger.info,
                  max_sentence_batch_size=16384,
                  ):
         self.max_sentence_batch_size = max_sentence_batch_size
         self.sentences = sentences
+        self.sentence_feature_class = sentence_feature_class
+        self.convert_func = convert_func
         self.random = Random(seed)
         length_counter = Counter(len(i) for i in sentences)
         lengths = group_sentences(length_counter, n_buckets, batch_size)
@@ -214,8 +226,9 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
             {length: [] for length in lengths})
         for sent_idx, sentence in enumerate(self.sentences):
             padded_length = length_to_bucket[len(sentence)]
-            self.buckets[padded_length].append(convert_func(
-                sent_idx, sentence, padded_length))
+            self.buckets[padded_length].append(
+                self.sentence_feature_class.create_empty_item(
+                    sent_idx, sentence))
         log_func("use {} buckets: {}".format(
             len(lengths),
             {k: len(v) for k, v in self.buckets.items()}))
@@ -252,7 +265,13 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
             self.random.shuffle(length_and_sent_ids)
 
         for length, sent_ids in length_and_sent_ids:
-            batch_sentences = [self.buckets[length][i] for i in sent_ids]
+            batch_sentences = []
+            for i in sent_ids:
+                sent = self.buckets[length][i]
+                if not sent.has_filled:
+                    self.buckets[length][i] = sent = self.convert_func(
+                        sent.original_idx, sent.original_obj, length)
+                batch_sentences.append(sent)
             yield self.return_batches(batch_sentences, pls, batch_size,
                                       sort_key_func, original, use_sub_batch, **kwargs)
 
