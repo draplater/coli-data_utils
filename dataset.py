@@ -8,6 +8,7 @@ import numpy as np
 from dataclasses import dataclass, field
 
 from coli.basic_tools.common_utils import split_to_batches, IdentityGetAttr, T
+from coli.basic_tools.dataclass_argparse import OptionsBase
 from coli.basic_tools.logger import default_logger
 from coli.data_utils.group_sentences import group_sentences
 
@@ -288,7 +289,7 @@ bucket_types = {"simple": SimpleSentenceBuckets, "length_group": SentenceBuckets
 
 
 @dataclass
-class HParamsBase(object):
+class HParamsBase(OptionsBase):
     train_iters: "Count of training step" = 50000
     train_batch_size: "Batch size when training (words)" = 5000
     test_batch_size: "Batch size when inference (words)" = 5000
