@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 import numpy as np
+from dataclasses import dataclass
 from namedlist import namedlist
 
 from coli.basic_tools.common_utils import UserCounter
@@ -92,7 +93,14 @@ class Dictionary(UserCounter):
         return Dictionary, ((),), self.__dict__
 
 
-class Statistics(namedlist("_", ["words", "postags", "labels", "characters", "supertags"])):
+@dataclass
+class Statistics(object):
+    words: Dictionary
+    postags: Dictionary
+    labels: Dictionary
+    characters: Dictionary
+    supertags: Dictionary
+
     @classmethod
     def from_sentences(cls, sentences, word_limit=1, initial=("___PAD___", "___UNKNOWN___")):
         """:type sentences: list[Graph | Sentence]"""
