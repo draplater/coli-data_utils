@@ -2,7 +2,7 @@ import itertools
 from abc import ABCMeta, abstractmethod
 from collections import Counter, OrderedDict
 from random import Random
-from typing import Optional, Mapping, List, Type, Generic, TypeVar, Callable, Any, Dict
+from typing import Optional, Mapping, List, Type, Generic, TypeVar, Callable, Any, Dict, Tuple, Iterable
 
 import numpy as np
 from dataclasses import dataclass, field
@@ -31,12 +31,12 @@ def lookup_list(tokens_itr, token_dict, padded_length,
     ret = tensor_factory((padded_length + (2 if start_and_stop else 0),),
                          dtype=dtype)
     if start_and_stop:
-        ret[0] = token_dict.get(START_OF_SENTENCE)
+        ret[0] = token_dict.get(START_OF_SENTENCE, default)
     idx = 1 if start_and_stop else 0
     for idx, word in enumerate(tokens_itr, idx):
         ret[idx] = token_dict.get(word, default)
     if start_and_stop:
-        ret[idx + 1] = token_dict.get(END_OF_SENTENCE)
+        ret[idx + 1] = token_dict.get(END_OF_SENTENCE, default)
 
     return ret
 
@@ -94,6 +94,44 @@ def split_to_sub_batches(iterable, sentence_count, word_count):
             total_words = 0
     if ret:
         yield ret
+
+
+class DataFormatBase(metaclass=ABCMeta):
+    file_header: Optional[str] = None
+    has_internal_evaluate_func: bool = False
+
+    @classmethod
+    @abstractmethod
+    def from_file(cls, file_name: str):
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_words_and_postags(cls, items: List[Tuple[str, str]]):
+        raise NotImplementedError
+
+    @classmethod
+    def internal_evaluate(cls, gold_sents: List["DataFormatBase"],
+                          system_sents: List["DataFormatBase"],
+                          log_file, print=True):
+        raise NotImplementedError
+
+    @classmethod
+    def evaluate_with_external_program(cls, gold_file, output_file,
+                                       perf_file=None, print=True):
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_string(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def write_to_file(cls, path: str, obj_list: Iterable["DataFormatBase"]):
+        with open(path, "w") as f:
+            if cls.file_header is not None:
+                f.write(cls.file_header)
+            for obj in obj_list:
+                f.write(obj.to_string())
 
 
 @dataclass
@@ -165,14 +203,19 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                  convert_func: Callable[[int, T, Optional[int]], U],
                  batch_size: int,
                  n_buckets: int,
+                 sentence_feature_class: Type[SentenceFeaturesBase],
                  seed: Optional[int] = None,
                  log_func=default_logger.info,
                  max_sentence_batch_size=16384,
                  ):
         self.max_sentence_batch_size = max_sentence_batch_size
         self.sentences = sentences
+        self.sentence_feature_class = sentence_feature_class
+        self.convert_func = convert_func
+
         self.sentences_features = [
-            convert_func(idx, i, None) for idx, i in enumerate(self.sentences)]
+            self.sentence_feature_class.create_empty_item(
+                idx, i) for idx, i in enumerate(self.sentences)]
         self.random = Random(seed)
 
     def __len__(self):
@@ -185,12 +228,19 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                          use_sub_batch=False,
                          **kwargs
                          ):
-        sentences = list(self.sentences_features)
+        indices = list(range(len(self.sentences_features)))
         if shuffle:
-            self.random.shuffle(sentences)
-        for _, _, batch_sentences in split_to_batches(
-                sentences,
+            self.random.shuffle(indices)
+        for sent_id, _, batch_indices in split_to_batches(
+                indices,
                 self.max_sentence_batch_size):
+            batch_sentences = []
+            for i in batch_indices:
+                sent = self.sentences_features[i]
+                if not sent.has_filled:
+                    self.sentences_features[i] = sent = self.convert_func(
+                        sent.original_idx, sent.original_obj, None)
+                batch_sentences.append(sent)
             yield self.return_batches(batch_sentences, pls, batch_size,
                                       sort_key_func, original, use_sub_batch, **kwargs)
 
