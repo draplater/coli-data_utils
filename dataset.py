@@ -106,8 +106,7 @@ class DataFormatBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @classmethod
-    @abstractmethod
-    def from_words_and_postags(cls, items: List[Tuple[str, str]]):
+    def from_words_and_postags(cls, items: Iterable[Tuple[str, str]]):
         raise NotImplementedError
 
     @classmethod
@@ -119,6 +118,10 @@ class DataFormatBase(metaclass=ABCMeta):
     @classmethod
     def evaluate_with_external_program(cls, gold_file, output_file,
                                        perf_file=None, print=True):
+        if cls.has_internal_evaluate_func:
+            return cls.internal_evaluate(
+                cls.from_file(gold_file), cls.from_file(output_file),
+                log_file=perf_file, print=print)
         raise NotImplementedError
 
     @abstractmethod
