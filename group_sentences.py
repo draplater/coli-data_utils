@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 
 
-def group_sentences(length_counter, n_buckets, batch_size):
+def group_sentences(length_counter, n_buckets, batch_size, fix_sent_count=False):
     if len(length_counter) < n_buckets:
         n_buckets = len(length_counter)
     lengths = [0] + sorted(length_counter)
@@ -37,7 +37,10 @@ def group_sentences(length_counter, n_buckets, batch_size):
                 this_answer += range_sent_count * max_length
                 this_answer -= sigma_length_x_count[max_length_idx] - \
                                sigma_length_x_count[previous_length_idx]
-                this_sent_batch_size = batch_size // max_length
+                if fix_sent_count:
+                    this_sent_batch_size = batch_size
+                else:
+                    this_sent_batch_size = max(batch_size // max_length, 1)
                 dust_sent_size = this_sent_batch_size - range_sent_count % this_sent_batch_size
                 this_answer += dust_sent_size * max_length
                 # for k in range(previous_length_idx + 1, max_length_idx):

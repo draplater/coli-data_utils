@@ -1,6 +1,7 @@
 import itertools
 from abc import ABCMeta, abstractmethod
 from collections import Counter, OrderedDict
+from enum import Enum
 from random import Random
 from typing import Optional, Mapping, List, Type, Generic, TypeVar, Callable, Any, Dict, Tuple, Iterable
 
@@ -133,8 +134,10 @@ class DataFormatBase(metaclass=ABCMeta):
         with open(path, "w") as f:
             if cls.file_header is not None:
                 f.write(cls.file_header)
-            for obj in obj_list:
+            for idx, obj in enumerate(obj_list):
                 f.write(obj.to_string())
+                if idx % 100 == 0:
+                    f.flush()
 
 
 @dataclass
@@ -248,10 +251,70 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                                       sort_key_func, original, use_sub_batch, **kwargs)
 
 
+class StreamingSentenceBuckets(SentenceBucketsBase, Generic[U]):
+    def __init__(self, sentences: List[T],
+                 convert_func: Callable[[int, T, Optional[int]], U],
+                 batch_size: int,
+                 n_buckets: int,
+                 sentence_feature_class: Type[SentenceFeaturesBase],
+                 seed: Optional[int] = None,
+                 log_func=default_logger.info,
+                 max_sentence_batch_size=16384,
+                 ):
+        self.max_sentence_batch_size = max_sentence_batch_size
+        self.batch_size = batch_size
+        self.sentences = sentences
+        self.sentence_feature_class = sentence_feature_class
+        self.convert_func = convert_func
+
+    def __len__(self):
+        return len(self.sentences)
+
+    def generate_batches_inner(self,
+                               pls, batch_size,
+                               sort_key_func, original, use_sub_batch,
+                               **kwargs
+                               ):
+        batch_sentences_features = []
+        max_len_in_batch = 1
+        for sent_id, sentence in enumerate(self.sentences):
+            if (len(batch_sentences_features) + 1) * max(len(sentence), max_len_in_batch) > self.batch_size:
+                ret = self.return_batches(batch_sentences_features, pls, batch_size,
+                                          sort_key_func, original, use_sub_batch, **kwargs)
+                yield ret
+                batch_sentences_features = []
+                max_len_in_batch = 1
+            sent_feature = self.convert_func(sent_id, sentence, None)
+            batch_sentences_features.append(sent_feature)
+            max_len_in_batch = max(len(sentence), max_len_in_batch)
+        if batch_sentences_features:
+            ret = self.return_batches(batch_sentences_features, pls, batch_size,
+                                      sort_key_func, original, use_sub_batch, **kwargs)
+            yield ret
+
+    def generate_batches(self, batch_size,
+                         pls=IdentityGetAttr(),
+                         shuffle=False, original=False,
+                         sort_key_func=None,
+                         use_sub_batch=False,
+                         **kwargs
+                         ):
+        assert shuffle == False
+        yield from self.generate_batches_inner(pls, batch_size, sort_key_func,
+                                               original, use_sub_batch,
+                                               **kwargs)
+
+
 class SentenceBuckets(SentenceBucketsBase, Generic[U]):
     """
     Group sentences into similar lengths and generate batches.
     """
+
+    class Modes(Enum):
+        FIX_SENTENCE_COUNT = 1
+        FIX_WORD_COUNT = 1
+
+    mode = Modes.FIX_WORD_COUNT
 
     def __init__(self, sentences: List[T],
                  convert_func: Callable[[int, T, int], U],
@@ -268,7 +331,11 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
         self.convert_func = convert_func
         self.random = Random(seed)
         length_counter = Counter(len(i) for i in sentences)
-        lengths = group_sentences(length_counter, n_buckets, batch_size)
+
+        if self.mode == self.Modes.FIX_WORD_COUNT:
+            lengths = group_sentences(length_counter, n_buckets, batch_size)
+        else:
+            lengths = group_sentences(length_counter, n_buckets, max_sentence_batch_size, True)
 
         length_to_bucket = [0]
         for idx in range(len(lengths)):
@@ -306,8 +373,13 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
         length_and_sent_ids = []
         for length, sentences in self.buckets.items():
             sent_count = len(sentences)
-            sentence_batch_size = min(self.max_sentence_batch_size,
-                                      max(batch_size // length, 1))
+
+            if self.mode == self.Modes.FIX_WORD_COUNT:
+                sentence_batch_size = min(self.max_sentence_batch_size,
+                                          max(batch_size // length, 1))
+            else:
+                sentence_batch_size = self.max_sentence_batch_size
+
             sentence_ids = list(range(sent_count))
             if shuffle:
                 self.random.shuffle(sentence_ids)
@@ -330,6 +402,59 @@ class SentenceBuckets(SentenceBucketsBase, Generic[U]):
                                       sort_key_func, original, use_sub_batch, **kwargs)
 
 
+class SentenceBucketsFixedSentence(SentenceBuckets):
+    mode = SentenceBuckets.Modes.FIX_SENTENCE_COUNT
+
+
+class SortedSentenceBuckets(SentenceBucketsBase, Generic[U]):
+    def __init__(self, sentences: List[T],
+                 convert_func: Callable[[int, T, Optional[int]], U],
+                 batch_size: int,
+                 n_buckets: int,
+                 sentence_feature_class: Type[SentenceFeaturesBase],
+                 seed: Optional[int] = None,
+                 log_func=default_logger.info,
+                 max_sentence_batch_size=16384,
+                 ):
+        self.max_sentence_batch_size = max_sentence_batch_size
+        self.sentences = sentences
+        self.sentence_feature_class = sentence_feature_class
+        self.convert_func = convert_func
+
+        self.sentences_features = [
+            self.sentence_feature_class.create_empty_item(
+                idx, i) for idx, i in enumerate(self.sentences)]
+        self.sentences_features.sort(key=lambda i: len(i.original_obj))
+        self.random = Random(seed)
+
+    def __len__(self):
+        return len(self.sentences)
+
+    def generate_batches(self, batch_size,
+                         pls=IdentityGetAttr(),
+                         shuffle=False, original=False,
+                         sort_key_func=None,
+                         use_sub_batch=False,
+                         **kwargs
+                         ):
+        start_indices = list(range(0, len(self.sentences_features),
+                                   self.max_sentence_batch_size))
+        if shuffle:
+            self.random.shuffle(start_indices)
+        for start_index in start_indices:
+            batch_sentences = []
+            for i in range(start_index,
+                           min(start_index + self.max_sentence_batch_size,
+                               len(self.sentences_features))):
+                sent = self.sentences_features[i]
+                if not sent.has_filled:
+                    self.sentences_features[i] = sent = self.convert_func(
+                        sent.original_idx, sent.original_obj, None)
+                batch_sentences.append(sent)
+            yield self.return_batches(batch_sentences, pls, batch_size,
+                                      sort_key_func, original, use_sub_batch, **kwargs)
+
+
 def make_sentence_bucket_class(
         sentence_feature_class_: Type[U]) -> Type[SentenceBuckets[U]]:
     class SentenceBucketRet(SentenceBuckets[sentence_feature_class_]):
@@ -338,7 +463,12 @@ def make_sentence_bucket_class(
     return SentenceBucketRet
 
 
-bucket_types = {"simple": SimpleSentenceBuckets, "length_group": SentenceBuckets}
+bucket_types = {"simple": SimpleSentenceBuckets,
+                "length_group": SentenceBuckets,
+                "length_group_sent": SentenceBucketsFixedSentence,
+                "sorted": SortedSentenceBuckets,
+                "streaming": StreamingSentenceBuckets
+                }
 
 
 @dataclass
