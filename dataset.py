@@ -251,6 +251,65 @@ class SimpleSentenceBuckets(SentenceBucketsBase, Generic[U]):
                                       sort_key_func, original, use_sub_batch, **kwargs)
 
 
+class SquaredSentenceBuckets(SentenceBucketsBase, Generic[U]):
+    def __init__(self, sentences: List[T],
+                 convert_func: Callable[[int, T, Optional[int]], U],
+                 batch_size: int,
+                 n_buckets: int,
+                 sentence_feature_class: Type[SentenceFeaturesBase],
+                 seed: Optional[int] = None,
+                 log_func=default_logger.info,
+                 max_sentence_batch_size=16384,
+                 ):
+        self.batch_size = batch_size
+        self.max_sentence_batch_size = max_sentence_batch_size
+        self.sentences = sentences
+        self.sentence_feature_class = sentence_feature_class
+        self.convert_func = convert_func
+
+        self.sentences_features = [
+            self.sentence_feature_class.create_empty_item(
+                idx, i) for idx, i in enumerate(self.sentences)]
+        self.random = Random(seed)
+        self.log_func = log_func
+
+    def __len__(self):
+        return len(self.sentences)
+
+    def generate_batches(self, batch_size,
+                         pls=IdentityGetAttr(),
+                         shuffle=False, original=False,
+                         sort_key_func=None,
+                         use_sub_batch=False,
+                         **kwargs
+                         ):
+        indices = list(range(len(self.sentences_features)))
+        if shuffle:
+            self.random.shuffle(indices)
+        batch_sentences = []
+        max_len_in_batch = -1
+        for idx in indices:
+            sent = self.sentences_features[idx]
+            if not sent.has_filled:
+                self.sentences_features[idx] = sent = self.convert_func(
+                    sent.original_idx, sent.original_obj, None)
+            max_len = max(len(sent.original_obj), max_len_in_batch)
+            if len(batch_sentences) >= self.max_sentence_batch_size or \
+                    max_len * max_len * (len(batch_sentences) + 1) > self.batch_size:
+                # self.log_func(f"{len(batch_sentences)} Sentences. Max len {max_len_in_batch}. "
+                #               f"Lengths: {Counter(len(i.original_obj) for i in batch_sentences)}")
+                yield self.return_batches(batch_sentences, pls, batch_size,
+                                          sort_key_func, original, use_sub_batch, **kwargs)
+                batch_sentences = [sent]
+                max_len_in_batch = len(sent.original_obj)
+            else:
+                batch_sentences.append(sent)
+                max_len_in_batch = max_len
+        if batch_sentences:
+            yield self.return_batches(batch_sentences, pls, batch_size,
+                                      sort_key_func, original, use_sub_batch, **kwargs)
+
+
 class StreamingSentenceBuckets(SentenceBucketsBase, Generic[U]):
     def __init__(self, sentences: List[T],
                  convert_func: Callable[[int, T, Optional[int]], U],
@@ -467,7 +526,8 @@ bucket_types = {"simple": SimpleSentenceBuckets,
                 "length_group": SentenceBuckets,
                 "length_group_sent": SentenceBucketsFixedSentence,
                 "sorted": SortedSentenceBuckets,
-                "streaming": StreamingSentenceBuckets
+                "streaming": StreamingSentenceBuckets,
+                "square": SquaredSentenceBuckets
                 }
 
 
