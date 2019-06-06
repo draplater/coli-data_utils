@@ -144,7 +144,6 @@ class DataFormatBase(metaclass=ABCMeta):
 class SentenceFeaturesBase(Generic[T], metaclass=ABCMeta):
     original_idx: int = -1
     original_obj: T = None
-    words: Any = None
     extra: Dict[str, Any] = field(default_factory=dict)
     has_filled: bool = True
 
@@ -157,7 +156,6 @@ class SentenceFeaturesBase(Generic[T], metaclass=ABCMeta):
                    original_obj=sentence, has_filled=False)
 
     @classmethod
-    @abstractmethod
     def from_sentence_obj(cls,
                           original_idx: int,
                           sentence: T,
@@ -166,12 +164,20 @@ class SentenceFeaturesBase(Generic[T], metaclass=ABCMeta):
                           lower: bool = True,
                           plugins: Any = None
                           ):
-        pass
+        # noinspection PyArgumentList
+        ret = cls(original_idx=original_idx, original_obj=sentence)
+        for plugin in plugins.values():
+            plugin.process_sentence_feature(sentence, ret, len(sentence), False)
+        return ret
 
     @classmethod
-    @abstractmethod
     def get_feed_dict(cls, pls, batch_sentences, plugins=None):
-        pass
+        ret = {}
+        if plugins:
+            for plugin in plugins.values():
+                plugin.process_batch(pls, ret, batch_sentences)
+
+        return ret
 
 
 U = TypeVar("U", bound=SentenceFeaturesBase)
