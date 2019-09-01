@@ -107,8 +107,16 @@ class DataFormatBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @classmethod
+    def from_string(cls, input_string):
+        raise NotImplementedError
+
+    @classmethod
     def from_words_and_postags(cls, items: Iterable[Tuple[str, str]]):
         raise NotImplementedError
+
+    @classmethod
+    def from_words(cls, words: Iterable[str]):
+        return cls.from_words_and_postags([(word, "X") for word in words])
 
     @classmethod
     def internal_evaluate(cls, gold_sents: List["DataFormatBase"],
