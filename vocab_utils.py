@@ -1,14 +1,10 @@
 from typing import List, Dict
 
 import numpy as np
-from dataclasses import dataclass
-from namedlist import namedlist
 
 from coli.basic_tools.common_utils import UserCounter
 from coli.data_utils.dataset import PAD, UNKNOWN
-from coli.bilexical_base.graph_utils import Graph
 from coli.basic_tools.logger import default_logger
-from coli.bilexical_base.tree_utils import Sentence
 
 
 class Dictionary(UserCounter):
@@ -91,45 +87,3 @@ class Dictionary(UserCounter):
 
     def __reduce__(self):
         return Dictionary, ((),), self.__dict__
-
-
-@dataclass
-class Statistics(object):
-    words: Dictionary
-    postags: Dictionary
-    labels: Dictionary
-    characters: Dictionary
-    supertags: Dictionary
-    lemmas: Dictionary
-
-    @classmethod
-    def from_sentences(cls, sentences, word_limit=1, initial=("___PAD___", "___UNKNOWN___")):
-        """:type sentences: list[Graph | Sentence]"""
-        ret = cls(Dictionary(initial=initial), Dictionary(initial=initial),
-                  Dictionary(initial=initial), Dictionary(initial=initial),
-                  Dictionary(initial=initial), Dictionary(initial=initial))
-        for sentence in sentences:
-            ret.words.update(i.norm for i in sentence)
-            ret.lemmas.update(i.lemma for i in sentence)
-            ret.characters.update(j for i in sentence for j in i.form)
-            ret.characters.update(j for i in sentence for j in i.lemma)
-            ret.postags.update(i.postag for i in sentence)
-            ret.supertags.update(getattr(i, "supertag", None) for i in sentence)
-            if isinstance(sentence, Graph):
-                ret.labels.update(edge.label for node in sentence for edge in node.edges)
-            else:
-                # assert isinstance(sentence, Sentence)
-                ret.labels.update(i.relation for i in sentence)
-        if word_limit > 1:
-            ret.words = ret.words.strip_low_freq(min_count=word_limit,
-                                                 ensure=initial)
-        if word_limit > 1:
-            ret.lemmas = ret.lemmas.strip_low_freq(min_count=word_limit,
-                                                 ensure=initial)
-        return ret
-
-    def __str__(self):
-        return "{} words, {} lemmas, {} postags, {} labels, {} characters, {} supertags.".format(
-            len(self.words), len(self.lemmas), len(self.postags), len(self.labels), len(self.characters),
-            len(self.supertags)
-        )
